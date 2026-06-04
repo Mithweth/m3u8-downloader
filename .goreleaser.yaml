@@ -1,0 +1,34 @@
+version: 2
+
+project_name: m3u8-downloader
+
+builds:
+  - id: m3u8-downloader
+    main: ./cmd/cli
+    env:
+      - CGO_ENABLED=0
+    ldflags:
+      - -s -w -X main.version={{.Version}} -X main.commit={{.Commit}} -X main.date={{.Date}}
+    goos:
+      - linux
+      - darwin
+    goarch:
+      - amd64
+      - arm64
+    binary: m3u8-downloader
+
+archives:
+  - id: m3u8-downloader
+    ids:
+      - m3u8-downloader
+    formats:
+      - tar.gz
+    name_template: "{{ .Binary }}_{{ .Os }}_{{ .Arch }}"
+    files:
+      - README.md
+
+checksum:
+  name_template: "checksums.txt"
+
+changelog:
+  use: git

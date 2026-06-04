@@ -1,0 +1,31 @@
+name: Release
+on:  # yamllint disable-line rule:truthy
+  release:
+    types:
+      - published
+
+permissions:
+  contents: write
+
+jobs:
+  goreleaser:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+
+      - name: Install GoReleaser
+        shell: bash
+        run: go install github.com/goreleaser/goreleaser/v2@v2.11
+
+      - name: Run GoReleaser
+        shell: bash
+        run: goreleaser release --clean
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
