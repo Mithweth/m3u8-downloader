@@ -36,6 +36,7 @@ func Convert(ffmpegBin, fileList, output string) error {
 		ffmpegBin,
 		"-v", "error",
 		"-f", "concat",
+		"-y",
 		"-i", fileList,
 		"-c", "copy",
 		"-bsf:a", "aac_adtstoasc",

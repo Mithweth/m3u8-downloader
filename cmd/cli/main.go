@@ -21,6 +21,7 @@ func parseArgs() (config.Config, error) {
 	var (
 		extraHeaders []string
 		saveConfig   bool
+		overwrite    bool
 	)
 	cfg := config.Config{}
 	tomlCfg, err := config.LoadConfig()
@@ -77,6 +78,14 @@ func parseArgs() (config.Config, error) {
 		"Path to ffmpeg binary",
 	)
 
+	pflag.BoolVarP(
+		&overwrite,
+		"overwrite",
+		"y",
+		false,
+		"Overwrite output file if exists",
+	)
+
 	pflag.IntVarP(
 		&tomlCfg.Videos.MaxParallel,
 		"max-parallel",
@@ -115,7 +124,6 @@ func parseArgs() (config.Config, error) {
 	if err != nil {
 		return config.Config{}, err
 	}
-
 	if saveConfig {
 		config.SaveConfig(tomlCfg)
 	}
@@ -124,6 +132,11 @@ func parseArgs() (config.Config, error) {
 	cfg.OutputFile, err = ostools.ExpandPath(pflag.Arg(1))
 	if err != nil {
 		return config.Config{}, err
+	}
+	if !overwrite {
+		if _, err := os.Stat(cfg.OutputFile); err == nil {
+			return config.Config{}, fmt.Errorf("file already exists: %s", cfg.OutputFile)
+		}
 	}
 	return cfg, nil
 }
@@ -138,9 +151,6 @@ func Run() error {
 	cfg, err := parseArgs()
 	if err != nil {
 		return err
-	}
-	if _, err := os.Stat(cfg.OutputFile); err == nil {
-		return fmt.Errorf("file already exists: %s", cfg.OutputFile)
 	}
 	entries, err := m3u8.DownloadM3U8(cfg.URL, cfg.FileConfig.Headers)
 	if err != nil {
@@ -171,10 +181,34 @@ func Run() error {
 			cleanup()
 		}
 	}()
-	files, err := m3u8.DownloadVideos(entries[:3], workDir, cfg.FileConfig.Headers, cfg.FileConfig.Videos.MaxParallel)
+	events := make(chan m3u8.DownloadEvent)
+
+	go func() {
+		for ev := range events {
+			switch {
+			case ev.AlreadyExists:
+				fmt.Printf("[%d/%d] Downloading %s... SKIP\n", ev.Done, ev.Total, ev.URL)
+			case ev.Success:
+				fmt.Printf("[%d/%d] Downloading %s... OK\n", ev.Done, ev.Total, ev.URL)
+			default:
+				fmt.Printf("[%d/%d] Downloading %s... FAIL (%v)\n", ev.Done, ev.Total, ev.URL, ev.Error)
+			}
+		}
+	}()
+
+	files, err := m3u8.DownloadVideos(
+		entries,
+		workDir,
+		cfg.FileConfig.Headers,
+		cfg.FileConfig.Videos.MaxParallel,
+		events,
+	)
+	close(events)
+
 	if err != nil {
 		return err
 	}
+
 	fileList, err := ffmpeg.PrepareFileList(workDir, files)
 	if err != nil {
 		return err
