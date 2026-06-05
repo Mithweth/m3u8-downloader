@@ -7,6 +7,26 @@ import (
 	"path/filepath"
 )
 
+func ValidateBinary(path string) (string, error) {
+	var err error
+
+	if path == "" {
+		path, err = exec.LookPath("ffmpeg")
+		if err != nil {
+			return "", fmt.Errorf("ffmpeg not found: please install it or specify with --ffmpeg")
+		}
+	}
+
+	if _, err := exec.Command(path, "-version").CombinedOutput(); err != nil {
+		if pathErr, ok := err.(*os.PathError); ok {
+			return "", fmt.Errorf("%s is not a valid ffmpeg executable: %v", path, pathErr.Err)
+		}
+		return "", err
+	}
+
+	return path, nil
+}
+
 func PrepareFileList(path string, files []string) (string, error) {
 	concatFile := filepath.Join(path, "concat.txt")
 	fd, err := os.Create(concatFile)

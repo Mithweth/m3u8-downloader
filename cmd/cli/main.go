@@ -127,6 +127,11 @@ func parseArgs() (config.Config, error) {
 	if saveConfig {
 		config.SaveConfig(tomlCfg)
 	}
+	tomlCfg.Paths.FFmpegBinary, err = ffmpeg.ValidateBinary(tomlCfg.Paths.FFmpegBinary)
+	if err != nil {
+		return config.Config{}, err
+	}
+	fmt.Printf("Using ffmpeg: %s\n", tomlCfg.Paths.FFmpegBinary)
 	cfg.FileConfig = tomlCfg
 	cfg.URL = pflag.Arg(0)
 	cfg.OutputFile, err = ostools.ExpandPath(pflag.Arg(1))
