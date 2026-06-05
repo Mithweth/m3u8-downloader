@@ -11,6 +11,7 @@ default: build
 build: fmt
 	@$(GO) mod download
 	@$(GO) build -o m3u8-downloader cmd/cli/main.go
+	@$(GO) build -o m3u8-downloader-gui cmd/gui/main.go
 
 fmt:
 	@$(GO) fmt ./...
@@ -30,6 +31,7 @@ clean:
 install: 
 	$(INSTALLBIN) -d $(PREFIX)/bin/
 	$(INSTALLBIN) -m 755 m3u8-downloader $(PREFIX)/bin/
+	$(INSTALLBIN) -m 755 m3u8-downloader-gui $(PREFIX)/bin/
 
 uninstall:
-	$(REMOVE) -f $(PREFIX)/bin/m3u8-downloader
+	$(REMOVE) -f $(PREFIX)/bin/m3u8-downloader $(PREFIX)/bin/m3u8-downloader-gui
