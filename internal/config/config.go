@@ -82,7 +82,9 @@ func SaveConfig(cfg TomlConfig) error {
 	if err != nil {
 		return err
 	}
-	defer fd.Close()
+	defer func() {
+		_ = fd.Close()
+	}()
 
 	return toml.NewEncoder(fd).Encode(cfg)
 }

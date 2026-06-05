@@ -125,7 +125,9 @@ func parseArgs() (config.Config, error) {
 		return config.Config{}, err
 	}
 	if saveConfig {
-		config.SaveConfig(tomlCfg)
+		if err = config.SaveConfig(tomlCfg); err != nil {
+			return config.Config{}, err
+		}
 	}
 	tomlCfg.Paths.FFmpegBinary, err = ffmpeg.ValidateBinary(tomlCfg.Paths.FFmpegBinary)
 	if err != nil {
