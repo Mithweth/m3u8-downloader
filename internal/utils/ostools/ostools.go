@@ -26,6 +26,9 @@ func GetWorkingDirectory(tempDirectory string) (string, func(), error) {
 }
 
 func ExpandPath(path string) (string, error) {
+	if path == "" {
+		return "", nil
+	}
 	if strings.HasPrefix(path, "~") {
 		home, err := os.UserHomeDir()
 		if err != nil {
@@ -38,6 +41,5 @@ func ExpandPath(path string) (string, error) {
 			path = filepath.Join(home, path[2:])
 		}
 	}
-
 	return filepath.Abs(path)
 }
