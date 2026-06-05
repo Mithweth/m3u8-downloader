@@ -3,7 +3,7 @@ version: 2
 project_name: m3u8-downloader
 
 builds:
-  - id: darwin-amd64
+  - id: cli-darwin-amd64
     binary: m3u8-downloader
     main: ./cmd/cli
     goos:
@@ -16,7 +16,7 @@ builds:
       - CGO_ENABLED=0
       - MACOSX_DEPLOYMENT_TARGET=10.13
 
-  - id: darwin-arm64
+  - id: cli-darwin-arm64
     binary: m3u8-downloader
     main: ./cmd/cli
     goos:
@@ -28,7 +28,7 @@ builds:
     env:
       - CGO_ENABLED=0
 
-  - id: linux
+  - id: cli-linux
     binary: m3u8-downloader
     main: ./cmd/cli
     goos:
@@ -41,15 +41,50 @@ builds:
     env:
       - CGO_ENABLED=0
 
+  - id: gui-darwin-amd64
+    binary: m3u8-downloader-gui
+    main: ./cmd/gui
+    goos:
+      - darwin
+    goarch:
+      - amd64
+    env:
+      - CGO_ENABLED=1
+      - MACOSX_DEPLOYMENT_TARGET=10.13
+
+  - id: gui-darwin-arm64
+    binary: m3u8-downloader-gui
+    main: ./cmd/gui
+    goos:
+      - darwin
+    goarch:
+      - arm64
+    env:
+      - CGO_ENABLED=1
+
+  - id: gui-linux
+    binary: m3u8-downloader-gui
+    main: ./cmd/gui
+    goos:
+      - linux
+    goarch:
+      - amd64
+      - arm64
+    env:
+      - CGO_ENABLED=1
+
 archives:
   - id: m3u8-downloader
     ids:
-      - linux
-      - darwin-amd64
-      - darwin-arm64
+      - cli-linux
+      - cli-darwin-amd64
+      - cli-darwin-arm64
+      - gui-linux
+      - gui-darwin-amd64
+      - gui-darwin-arm64
     formats:
       - tar.gz
-    name_template: "{{ .Binary }}_{{ .Os }}_{{ .Arch }}"
+    name_template: "{{ .Os }}_{{ .Arch }}"
     files:
       - README.md
 

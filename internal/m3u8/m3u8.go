@@ -2,8 +2,8 @@ package m3u8
 
 import (
 	"bufio"
-	"errors"
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -20,6 +20,7 @@ type DownloadEvent struct {
 	Total         int
 	AlreadyExists bool
 	URL           string
+	FilePath      string
 	Success       bool
 	Error         error
 }
@@ -74,8 +75,9 @@ func DownloadM3U8(m3u8url string, headers map[string]string) ([]string, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer resp.Body.Close()
-
+	defer func() {
+		_ = resp.Body.Close()
+	}()
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		return nil, fmt.Errorf("HTTP error %d", resp.StatusCode)
 	}
@@ -136,8 +138,9 @@ func DownloadVideo(ctx context.Context, videoUrl, path string, index int, header
 	if err != nil {
 		return false, "", err
 	}
-	defer resp.Body.Close()
-
+	defer func() {
+		_ = resp.Body.Close()
+	}()
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		return false, "", fmt.Errorf("HTTP error %d: %s", resp.StatusCode, videoUrl)
 	}
@@ -146,8 +149,9 @@ func DownloadVideo(ctx context.Context, videoUrl, path string, index int, header
 	if err != nil {
 		return false, "", err
 	}
-	defer f.Close()
-
+	defer func() {
+		_ = f.Close()
+	}()
 	_, err = io.Copy(f, resp.Body)
 	if err != nil {
 		return false, "", err
@@ -200,11 +204,12 @@ func DownloadVideos(
 				cancel()
 				errCh <- fmt.Errorf("download %s: %w", entry, err)
 				events <- DownloadEvent{
-					Done:    currentDone,
-					Total:   total,
-					URL:     entry,
-					Success: false,
-					Error:   err,
+					Done:     currentDone,
+					Total:    total,
+					URL:      entry,
+					FilePath: dest,
+					Success:  false,
+					Error:    err,
 				}
 				return
 			}
@@ -213,6 +218,7 @@ func DownloadVideos(
 				Total:         total,
 				AlreadyExists: exists,
 				URL:           entry,
+				FilePath:      dest,
 				Success:       err == nil,
 				Error:         err,
 			}
