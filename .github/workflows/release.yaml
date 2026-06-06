@@ -19,16 +19,11 @@ jobs:
         with:
           go-version-file: go.mod
 
-      - name: Install GUI dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y gcc libgl1-mesa-dev xorg-dev libxkbcommon-dev
-
       - name: Install GoReleaser
         run: go install github.com/goreleaser/goreleaser/v2@v2.11
 
       - name: Build Linux artifacts
-        run: goreleaser release --clean --skip=publish --config .goreleaser-linux.yml
+        run: goreleaser release --clean --skip=publish --config .goreleaser-linux.yaml
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
@@ -54,7 +49,7 @@ jobs:
         run: go install github.com/goreleaser/goreleaser/v2@v2.11
 
       - name: Build macOS artifacts
-        run: goreleaser release --clean --skip=publish --config .goreleaser-darwin.yml
+        run: goreleaser release --clean --skip=publish --config .goreleaser-darwin.yaml
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
