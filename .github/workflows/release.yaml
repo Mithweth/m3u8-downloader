@@ -19,6 +19,21 @@ jobs:
         with:
           go-version-file: go.mod
 
+      - name: Install Fyne Linux dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            gcc \
+            pkg-config \
+            libgl1-mesa-dev \
+            libx11-dev \
+            libxcursor-dev \
+            libxrandr-dev \
+            libxinerama-dev \
+            libxi-dev \
+            libxxf86vm-dev \
+            libxkbcommon-dev
+
       - name: Install GoReleaser
         run: go install github.com/goreleaser/goreleaser/v2@v2.11
 
@@ -28,7 +43,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Upload Linux artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: linux-dist
           path: |
@@ -54,7 +69,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Upload macOS artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: darwin-dist
           path: |
@@ -67,8 +82,12 @@ jobs:
       - darwin
 
     steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
       - name: Download artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           path: release-dist
           merge-multiple: true
@@ -77,14 +96,12 @@ jobs:
         working-directory: release-dist
         run: sha256sum *.tar.gz > checksums.txt
 
-      - name: Publish GitHub release
+      - name: Upload artifacts to existing release
         working-directory: release-dist
         run: |
-          gh release create "${GITHUB_REF_NAME}" \
-            --verify-tag \
-            --title "${GITHUB_REF_NAME}" \
-            --generate-notes \
+          gh release upload "${GITHUB_REF_NAME}" \
             *.tar.gz \
-            checksums.txt
+            checksums.txt \
+            --clobber
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -3,38 +3,57 @@ version: 2
 project_name: m3u8-downloader
 
 builds:
-  - id: cli
+  - id: cli-linux-amd64
     binary: m3u8-downloader
     main: ./cmd/cli
     goos:
       - linux
     goarch:
       - amd64
+    ldflags:
+      - -s -w -X main.version={{.Version}} -X main.commit={{.Commit}} -X main.date={{.Date}}
+    env:
+      - CGO_ENABLED=0
+
+  - id: cli-linux-arm64
+    binary: m3u8-downloader
+    main: ./cmd/cli
+    goos:
+      - linux
+    goarch:
       - arm64
     ldflags:
       - -s -w -X main.version={{.Version}} -X main.commit={{.Commit}} -X main.date={{.Date}}
     env:
       - CGO_ENABLED=0
 
-  - id: gui
+  - id: gui-linux-amd64
     binary: m3u8-downloader-gui
     main: ./cmd/gui
     goos:
       - linux
     goarch:
       - amd64
-      - arm64
     env:
       - CGO_ENABLED=1
 
 archives:
-  - id: m3u8-downloader
+  - id: linux-amd64
     ids:
-      - cli
-      - gui
+      - cli-linux-amd64
+      - gui-linux-amd64
     formats:
       - tar.gz
-    name_template: "{{ .Os }}_{{ .Arch }}"
+    name_template: "{{ .ProjectName }}_{{ .Os }}_{{ .Arch }}"
+    files:
+      - README.md
+
+  - id: linux-arm64
+    ids:
+      - cli-linux-arm64
+    formats:
+      - tar.gz
+    name_template: "{{ .ProjectName }}_{{ .Os }}_{{ .Arch }}"
     files:
       - README.md
 
