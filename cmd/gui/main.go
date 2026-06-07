@@ -118,11 +118,6 @@ func main() {
 			dialog.ShowError(err, mainWindow)
 			return
 		}
-		defer func() {
-			if err == nil {
-				cleanup()
-			}
-		}()
 		events := make(chan m3u8.DownloadEvent)
 
 		go func() {
@@ -141,6 +136,7 @@ func main() {
 		}()
 
 		go func() {
+			defer cleanup()
 			files, err := m3u8.DownloadVideos(
 				entries,
 				workDir,
