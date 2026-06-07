@@ -183,11 +183,7 @@ func Run() error {
 	if err != nil {
 		return err
 	}
-	defer func() {
-		if err == nil {
-			cleanup()
-		}
-	}()
+	defer cleanup()
 	events := make(chan m3u8.DownloadEvent)
 
 	go func() {
