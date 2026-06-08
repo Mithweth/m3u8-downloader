@@ -112,7 +112,10 @@ func DownloadVideo(ctx context.Context, videoUrl, path string, index int, header
 	}
 
 	filename := filepath.Base(u.Path)
-	filename = strings.Split(filename, ".")[0] + fmt.Sprintf("%04d", index)
+	ext := filepath.Ext(filename)
+	base := strings.TrimSuffix(filename, ext)
+
+	filename = fmt.Sprintf("%s%04d%s", base, index, ext)
 	if !strings.HasSuffix(filename, ".ts") {
 		filename += ".ts"
 	}
