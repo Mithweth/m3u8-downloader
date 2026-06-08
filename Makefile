@@ -10,8 +10,8 @@ default: build
 
 build: fmt
 	@$(GO) mod download
-	@$(GO) build -o m3u8-downloader cmd/cli/main.go
-	@$(GO) build -o m3u8-downloader-gui cmd/gui/main.go
+	@$(GO) build -o m3u8-downloader ./cmd/cli
+	@$(GO) build -o m3u8-downloader-gui ./cmd/gui
 
 fmt:
 	@$(GO) fmt ./...

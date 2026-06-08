@@ -17,6 +17,11 @@ func ValidateBinary(path string) (string, error) {
 		}
 	}
 
+	path, err = filepath.Abs(path)
+	if err != nil {
+		return "", err
+	}
+
 	if _, err := exec.Command(path, "-version").CombinedOutput(); err != nil {
 		if pathErr, ok := err.(*os.PathError); ok {
 			return "", fmt.Errorf("%s is not a valid ffmpeg executable: %v", path, pathErr.Err)
