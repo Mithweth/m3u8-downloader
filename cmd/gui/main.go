@@ -17,7 +17,7 @@ import (
 )
 
 func main() {
-	a := app.New()
+	a := app.NewWithID("com.github.mithweth.m3u8-downloader")
 
 	mainWindow := a.NewWindow("M3U8 Downloader")
 	mainWindow.Resize(fyne.NewSize(600, 200))
@@ -127,8 +127,7 @@ func main() {
 					currentFileLabel.SetText(fmt.Sprintf("Downloading %s", filepath.Base(ev.FilePath)))
 
 					if !ev.Success {
-						err = ev.Error
-						fmt.Println(err)
+						fmt.Println(ev.Error)
 						dialog.ShowError(ev.Error, mainWindow)
 					}
 				})
@@ -168,8 +167,7 @@ func main() {
 			})
 
 			if errConvert := ffmpeg.Convert(absFfmpegPath, fileList, absOutputFile); errConvert != nil {
-				err = errConvert
-				dialog.ShowError(err, mainWindow)
+				dialog.ShowError(errConvert, mainWindow)
 				return
 			}
 
@@ -177,10 +175,18 @@ func main() {
 				currentFileLabel.SetText(fmt.Sprintf("%s created !", filepath.Base(absOutputFile)))
 				outputFile.SetText("")
 				m3uUrl.SetText("")
+				formatSelect.ClearSelected()
 				formatSelect.Disable()
-				outputFile.Disable()
-				m3uUrl.Disable()
 				processButton.Disable()
+				dialog.ShowInformation(
+					"File created",
+					fmt.Sprintf("%s created !", filepath.Base(absOutputFile)),
+					mainWindow,
+				)
+				tomlCfg, err = config.LoadConfig()
+				if err != nil {
+					dialog.ShowError(err, mainWindow)
+				}
 			})
 		}()
 	})
@@ -216,6 +222,22 @@ func main() {
 		}
 	}
 
+	browseButton := widget.NewButton("Browse", func() {
+		dialog.ShowFileSave(func(writer fyne.URIWriteCloser, err error) {
+			if err != nil {
+				dialog.ShowError(err, mainWindow)
+				return
+			}
+
+			if writer == nil {
+				return
+			}
+
+			outputFile.SetText(writer.URI().Path())
+			writer.Close()
+		}, mainWindow)
+	})
+
 	mainWindow.SetContent(
 		container.NewVBox(
 			container.NewBorder(
@@ -227,7 +249,7 @@ func main() {
 			container.NewBorder(
 				nil, nil,
 				widget.NewLabel("Output file"),
-				nil,
+				browseButton,
 				outputFile,
 			),
 			container.NewBorder(

@@ -26,7 +26,7 @@ coverage:
 	@$(GO) tool cover -func=cover.out
 
 clean:
-	@$(REMOVE) -f m3u8-downloader cover.out
+	@$(REMOVE) -f m3u8-downloader m3u8-downloader-gui cover.out
 
 install: 
 	$(INSTALLBIN) -d $(PREFIX)/bin/
