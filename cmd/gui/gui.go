@@ -65,12 +65,11 @@ func (g *GUI) Process() {
 		g.currentFileLabel.SetText("Preparing...")
 	})
 
-	entries, err := m3u8.DownloadM3U8(g.m3uUrl.Text, g.cfg.Headers)
+	entries, err := m3u8.DownloadM3U8(g.m3uUrl.Text, g.cfg.HTTP.Headers, g.cfg.HTTP.Insecure)
 	if err != nil {
 		g.showError(err)
 		return
 	}
-
 	if m3u8.IsPlaylist(entries) {
 		if g.formatSelect.Selected == "" {
 			formats := m3u8.GetFormats(entries)
@@ -89,7 +88,7 @@ func (g *GUI) Process() {
 
 		for _, entry := range entries {
 			if m3u8.IsPreferredFormat(entry, g.formatSelect.Selected) {
-				entries, err = m3u8.DownloadM3U8(entry, g.cfg.Headers)
+				entries, err = m3u8.DownloadM3U8(entry, g.cfg.HTTP.Headers, g.cfg.HTTP.Insecure)
 				if err != nil {
 					g.showError(err)
 					return
@@ -130,18 +129,16 @@ func (g *GUI) Process() {
 	fmt.Println("temporary directory:", workDir)
 
 	events := make(chan m3u8.DownloadEvent)
-
 	go g.consumeEvents(events)
-
 	files, err := m3u8.DownloadVideos(
 		entries,
 		workDir,
-		g.cfg.Headers,
+		g.cfg.HTTP.Headers,
 		g.cfg.Videos.MaxParallel,
+		g.cfg.HTTP.Insecure,
 		events,
 	)
 	close(events)
-
 	if err != nil {
 		g.showError(err)
 		return
