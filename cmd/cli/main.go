@@ -36,15 +36,23 @@ func parseArgs() (config.Config, error) {
 	pflag.StringP(
 		"referer",
 		"e",
-		tomlCfg.Headers["Referer"],
+		tomlCfg.HTTP.Headers["Referer"],
 		"HTTP Referer header",
 	)
 
 	pflag.StringP(
 		"user-agent",
 		"A",
-		tomlCfg.Headers["User-Agent"],
+		tomlCfg.HTTP.Headers["User-Agent"],
 		"HTTP User-Agent header",
+	)
+
+	pflag.BoolVarP(
+		&tomlCfg.HTTP.Insecure,
+		"insecure",
+		"k",
+		tomlCfg.HTTP.Insecure,
+		"Skip SSL verification and proceed without checking",
 	)
 
 	pflag.StringArrayVarP(
@@ -109,8 +117,8 @@ func parseArgs() (config.Config, error) {
 		os.Exit(1)
 	}
 
-	tomlCfg.Headers["Referer"], _ = pflag.CommandLine.GetString("referer")
-	tomlCfg.Headers["User-Agent"], _ = pflag.CommandLine.GetString("user-agent")
+	tomlCfg.HTTP.Headers["Referer"], _ = pflag.CommandLine.GetString("referer")
+	tomlCfg.HTTP.Headers["User-Agent"], _ = pflag.CommandLine.GetString("user-agent")
 	for _, h := range extraHeaders {
 		name, value, ok := strings.Cut(h, ":")
 		if !ok {
@@ -118,7 +126,7 @@ func parseArgs() (config.Config, error) {
 		}
 		name = strings.TrimSpace(name)
 		value = strings.TrimSpace(value)
-		tomlCfg.Headers[name] = value
+		tomlCfg.HTTP.Headers[name] = value
 	}
 	tomlCfg.Paths.FFmpegBinary, err = ostools.ExpandPath(tomlCfg.Paths.FFmpegBinary)
 	if err != nil {
@@ -159,7 +167,7 @@ func Run() error {
 	if err != nil {
 		return err
 	}
-	entries, err := m3u8.DownloadM3U8(cfg.URL, cfg.FileConfig.Headers)
+	entries, err := m3u8.DownloadM3U8(cfg.URL, cfg.FileConfig.HTTP.Headers, cfg.FileConfig.HTTP.Insecure)
 	if err != nil {
 		return err
 	}
@@ -167,7 +175,7 @@ func Run() error {
 		hasDownloaded := false
 		for _, entry := range entries {
 			if m3u8.IsPreferredFormat(entry, cfg.FileConfig.Videos.PreferredFormat) {
-				entries, err = m3u8.DownloadM3U8(entry, cfg.FileConfig.Headers)
+				entries, err = m3u8.DownloadM3U8(entry, cfg.FileConfig.HTTP.Headers, cfg.FileConfig.HTTP.Insecure)
 				if err != nil {
 					return err
 				}
@@ -202,8 +210,9 @@ func Run() error {
 	files, err := m3u8.DownloadVideos(
 		entries,
 		workDir,
-		cfg.FileConfig.Headers,
+		cfg.FileConfig.HTTP.Headers,
 		cfg.FileConfig.Videos.MaxParallel,
+		cfg.FileConfig.HTTP.Insecure,
 		events,
 	)
 	close(events)

@@ -1,8 +1,13 @@
 package m3u8
 
+// TODO:
+// Parse EXT-X-BYTERANGE and download byte ranges from shared TS files.
+// Currently only supports playlists with distinct segment files.
+
 import (
 	"bufio"
 	"context"
+	"crypto/tls"
 	"errors"
 	"fmt"
 	"io"
@@ -23,10 +28,6 @@ type DownloadEvent struct {
 	FilePath      string
 	Success       bool
 	Error         error
-}
-
-var httpClient = &http.Client{
-	Timeout: 60 * time.Second,
 }
 
 func IsPlaylist(a []string) bool {
@@ -57,7 +58,7 @@ func IsPreferredFormat(s, f string) bool {
 	return p[len(p)-2] == f
 }
 
-func DownloadM3U8(m3u8url string, headers map[string]string) ([]string, error) {
+func DownloadM3U8(m3u8url string, headers map[string]string, insecure bool) ([]string, error) {
 	baseUrl, err := url.Parse(m3u8url)
 	if err != nil {
 		return nil, err
@@ -71,6 +72,16 @@ func DownloadM3U8(m3u8url string, headers map[string]string) ([]string, error) {
 		req.Header.Set(k, v)
 	}
 
+	httpClient := &http.Client{
+		Timeout: 60 * time.Second,
+	}
+	if insecure {
+		httpClient.Transport = &http.Transport{
+			TLSClientConfig: &tls.Config{
+				InsecureSkipVerify: true,
+			},
+		}
+	}
 	resp, err := httpClient.Do(req)
 	if err != nil {
 		return nil, err
@@ -105,7 +116,7 @@ func DownloadM3U8(m3u8url string, headers map[string]string) ([]string, error) {
 	return retval, nil
 }
 
-func DownloadVideo(ctx context.Context, videoUrl, path string, index int, headers map[string]string) (bool, string, error) {
+func DownloadVideo(ctx context.Context, videoUrl, path string, index int, headers map[string]string, insecure bool) (bool, string, error) {
 	u, err := url.Parse(videoUrl)
 	if err != nil {
 		return false, "", err
@@ -136,7 +147,16 @@ func DownloadVideo(ctx context.Context, videoUrl, path string, index int, header
 	for k, v := range headers {
 		req.Header.Set(k, v)
 	}
-
+	httpClient := &http.Client{
+		Timeout: 60 * time.Second,
+	}
+	if insecure {
+		httpClient.Transport = &http.Transport{
+			TLSClientConfig: &tls.Config{
+				InsecureSkipVerify: true,
+			},
+		}
+	}
 	resp, err := httpClient.Do(req)
 	if err != nil {
 		return false, "", err
@@ -168,6 +188,7 @@ func DownloadVideos(
 	path string,
 	headers map[string]string,
 	maxParallel int,
+	insecure bool,
 	events chan<- DownloadEvent,
 ) ([]string, error) {
 	if maxParallel <= 0 {
@@ -197,7 +218,7 @@ func DownloadVideos(
 				return
 			}
 
-			exists, dest, err := DownloadVideo(ctx, entry, path, i+1, headers)
+			exists, dest, err := DownloadVideo(ctx, entry, path, i+1, headers, insecure)
 			results[i] = dest
 			mu.Lock()
 			done++

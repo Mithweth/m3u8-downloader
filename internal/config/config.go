@@ -16,10 +16,15 @@ type PathsConfig struct {
 	FFmpegBinary string `toml:"ffmpeg_binary"`
 }
 
+type HTTPConfig struct {
+	Insecure bool              `toml:"insecure"`
+	Headers  map[string]string `toml:"headers"`
+}
+
 type TomlConfig struct {
-	Videos  VideosConfig      `toml:"videos"`
-	Paths   PathsConfig       `toml:"paths"`
-	Headers map[string]string `toml:"headers"`
+	HTTP   HTTPConfig   `toml:"http"`
+	Videos VideosConfig `toml:"videos"`
+	Paths  PathsConfig  `toml:"paths"`
 }
 
 type Config struct {
@@ -50,7 +55,9 @@ func LoadConfig() (TomlConfig, error) {
 		Videos: VideosConfig{
 			MaxParallel: 3,
 		},
-		Headers: map[string]string{},
+		HTTP: HTTPConfig{
+			Headers: map[string]string{},
+		},
 	}
 
 	configFile, err := getConfigFileName()

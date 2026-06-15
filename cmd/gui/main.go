@@ -23,9 +23,9 @@ func main() {
 	ffmpegPath.SetText(tomlCfg.Paths.FFmpegBinary)
 	outputFile := widget.NewEntry()
 	referer := widget.NewEntry()
-	referer.SetText(tomlCfg.Headers["Referer"])
+	referer.SetText(tomlCfg.HTTP.Headers["Referer"])
 	userAgent := widget.NewEntry()
-	userAgent.SetText(tomlCfg.Headers["User-Agent"])
+	userAgent.SetText(tomlCfg.HTTP.Headers["User-Agent"])
 	quitButton := widget.NewButton("Quit", func() {
 		a.Quit()
 	})
@@ -35,21 +35,6 @@ func main() {
 	progressBar := widget.NewProgressBar()
 	currentFileLabel := widget.NewLabel("")
 	var processButton *widget.Button
-	processButton = widget.NewButton("Process", func() {
-		gui := GUI{
-			window:           mainWindow,
-			cfg:              tomlCfg,
-			m3uUrl:           m3uUrl,
-			outputFile:       outputFile,
-			ffmpegPath:       ffmpegPath,
-			formatSelect:     formatSelect,
-			progressBar:      progressBar,
-			currentFileLabel: currentFileLabel,
-			processButton:    processButton,
-		}
-		go gui.Process()
-	})
-	processButton.Disable()
 	m3uUrl.OnChanged = func(value string) {
 		if value == "" || outputFile.Text == "" {
 			processButton.Disable()
@@ -73,15 +58,50 @@ func main() {
 	}
 	threadNumber := widget.NewSelect([]string{"1", "2", "3", "4", "5", "6", "7", "8"}, nil)
 	threadNumber.SetSelected(strconv.Itoa(tomlCfg.Videos.MaxParallel))
+	insecureCheckbox := widget.NewCheck("Insecure SSL", nil)
+	insecureCheckbox.SetChecked(tomlCfg.HTTP.Insecure)
+	processButton = widget.NewButton("Process", func() {
+		maxParallel, err := strconv.Atoi(threadNumber.Selected)
+		if err != nil {
+			dialog.ShowError(err, mainWindow)
+		}
+		gui := GUI{
+			window: mainWindow,
+			cfg: config.TomlConfig{
+				Videos: config.VideosConfig{
+					PreferredFormat: formatSelect.Selected,
+					MaxParallel:     maxParallel,
+				},
+				Paths: config.PathsConfig{FFmpegBinary: ffmpegPath.Text},
+				HTTP: config.HTTPConfig{
+					Headers: map[string]string{
+						"Referer":    referer.Text,
+						"User-Agent": userAgent.Text,
+					},
+					Insecure: insecureCheckbox.Checked,
+				},
+			},
+			m3uUrl:           m3uUrl,
+			outputFile:       outputFile,
+			ffmpegPath:       ffmpegPath,
+			formatSelect:     formatSelect,
+			progressBar:      progressBar,
+			currentFileLabel: currentFileLabel,
+			processButton:    processButton,
+		}
+		go gui.Process()
+	})
+	processButton.Disable()
 	saveConfigButton := widget.NewButton("Save config", func() {
+		tomlCfg.HTTP.Insecure = insecureCheckbox.Checked
 		tomlCfg.Videos.PreferredFormat = formatSelect.Selected
 		tomlCfg.Videos.MaxParallel, err = strconv.Atoi(threadNumber.Selected)
 		if err != nil {
 			dialog.ShowError(err, mainWindow)
 		}
 		tomlCfg.Paths.FFmpegBinary = ffmpegPath.Text
-		tomlCfg.Headers["Referer"] = referer.Text
-		tomlCfg.Headers["User-Agent"] = userAgent.Text
+		tomlCfg.HTTP.Headers["Referer"] = referer.Text
+		tomlCfg.HTTP.Headers["User-Agent"] = userAgent.Text
 		if err := config.SaveConfig(tomlCfg); err != nil {
 			dialog.ShowError(err, mainWindow)
 			return
@@ -154,11 +174,10 @@ func main() {
 					nil,
 					ffmpegPath,
 				),
-				container.NewBorder(
-					nil, nil,
+				container.NewHBox(
 					widget.NewLabel("Threads"),
-					nil,
 					threadNumber,
+					insecureCheckbox,
 				),
 			),
 			container.NewCenter(saveConfigButton),
