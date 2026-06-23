@@ -71,9 +71,10 @@ func (g *GUI) Process() {
 		g.showError(err)
 		return
 	}
+
 	if playlist.Type == domain.PlaylistMaster {
 		if g.formatSelect.Selected == "" {
-			formats := m3u8.GetFormats(playlist.Segments)
+			formats := m3u8.GetAvailableFormats(playlist.VideoVariations)
 
 			fyne.Do(func() {
 				g.formatSelect.Options = formats
@@ -87,8 +88,8 @@ func (g *GUI) Process() {
 			return
 		}
 
-		for _, entry := range playlist.Segments {
-			if m3u8.IsPreferredFormat(entry.URL, g.formatSelect.Selected) {
+		for _, entry := range playlist.VideoVariations {
+			if entry.Resolution == g.formatSelect.Selected {
 				playlist, err = m3u8.DownloadPlaylist(entry.URL, g.cfg.HTTP.Headers, g.cfg.HTTP.Insecure)
 				if err != nil {
 					g.showError(err)

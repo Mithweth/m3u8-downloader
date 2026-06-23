@@ -20,23 +20,14 @@ import (
 	"time"
 )
 
-func GetFormats(a []domain.Segment) []string {
+func GetAvailableFormats(a []domain.VideoVariation) []string {
 	var retval []string
 	for _, s := range a {
-		p := strings.Split(s.URL, "/")
-		if len(p) >= 2 {
-			retval = append(retval, p[len(p)-2])
+		if s.Resolution != "" {
+			retval = append(retval, s.Resolution)
 		}
 	}
 	return retval
-}
-
-func IsPreferredFormat(s, f string) bool {
-	p := strings.Split(s, "/")
-	if len(p) < 2 {
-		return false
-	}
-	return p[len(p)-2] == f
 }
 
 func DownloadVideo(ctx context.Context, videoUrl, path string, index int, headers map[string]string, insecure bool) (bool, string, error) {
