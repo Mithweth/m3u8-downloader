@@ -9,6 +9,7 @@ import (
 
 type VideosConfig struct {
 	MaxParallel     int    `toml:"max_parallel"`
+	FilePrefix      string `toml:"file_prefix"`
 	PreferredFormat string `toml:"preferred_format"`
 }
 

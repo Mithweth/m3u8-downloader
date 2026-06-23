@@ -8,10 +8,46 @@ import (
 	"github.com/Mithweth/m3u8-downloader/internal/utils/strtools"
 	"net/http"
 	"net/url"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
 )
+
+func generateName(segmentUrl, prefix string, index int) (string, error) {
+	u, err := url.Parse(segmentUrl)
+	if err != nil {
+		return "", err
+	}
+	filename := filepath.Base(u.Path)
+	ext := filepath.Ext(filename)
+	base := strings.TrimSuffix(filename, ext)
+	if prefix != "" {
+		base = prefix
+	}
+
+	filename = fmt.Sprintf("%s%05d%s", base, index, ext)
+	if !strings.HasSuffix(filename, ".ts") {
+		filename += ".ts"
+	}
+	return filename, nil
+}
+
+func extractByteRange(line string) (*domain.ByteRange, error) {
+	var offset int64
+	lengthStr, offsetStr, found := strings.Cut(strings.TrimPrefix(line, "#EXT-X-BYTERANGE:"), "@")
+	length, err := strconv.ParseInt(lengthStr, 10, 64)
+	if err != nil {
+		return nil, err
+	}
+	if found {
+		offset, err = strconv.ParseInt(offsetStr, 10, 64)
+		if err != nil {
+			return nil, err
+		}
+	}
+	return &domain.ByteRange{Length: length, Offset: offset}, nil
+}
 
 func extractStreamInf(line string) *domain.VideoVariation {
 	var v domain.VideoVariation
@@ -63,7 +99,7 @@ func extractDuration(line string) (float64, error) {
 	return strconv.ParseFloat(val, 64)
 }
 
-func DownloadPlaylist(m3u8url string, headers map[string]string, insecure bool) (*domain.Playlist, error) {
+func DownloadPlaylist(m3u8url, prefix string, headers map[string]string, insecure bool) (*domain.Playlist, error) {
 	baseUrl, err := url.Parse(m3u8url)
 	if err != nil {
 		return nil, err
@@ -100,13 +136,19 @@ func DownloadPlaylist(m3u8url string, headers map[string]string, insecure bool) 
 
 	p := domain.Playlist{URL: m3u8url}
 
-	var pendingVariation *domain.VideoVariation
-	var pendingDuration *float64
+	var (
+		pendingVariation *domain.VideoVariation
+		pendingByteRange *domain.ByteRange
+		pendingDuration  *float64
+		lastOffset       int64
+	)
 
 	scanner := bufio.NewScanner(resp.Body)
 	for scanner.Scan() {
 		line := strings.TrimSpace(scanner.Text())
-
+		if line == "" {
+			continue
+		}
 		if strings.HasPrefix(line, "#EXT-X-MAP") {
 			init, err := baseUrl.Parse(extractURI(line))
 			if err != nil {
@@ -128,10 +170,20 @@ func DownloadPlaylist(m3u8url string, headers map[string]string, insecure bool) 
 			pendingDuration = &d
 		}
 
+		if strings.HasPrefix(line, "#EXT-X-BYTERANGE") {
+			br, err := extractByteRange(line)
+			if err != nil {
+				return nil, err
+			}
+			if br.Offset == 0 && lastOffset > 0 {
+				br.Offset = lastOffset + br.Length
+			}
+			pendingByteRange = br
+		}
+
 		if strings.HasPrefix(line, "#") {
 			continue
 		}
-
 		u, err := baseUrl.Parse(line)
 		if err != nil {
 			return nil, err
@@ -141,10 +193,19 @@ func DownloadPlaylist(m3u8url string, headers map[string]string, insecure bool) 
 			p.VideoVariations = append(p.VideoVariations, *pendingVariation)
 			pendingVariation = nil
 		} else {
-			seg := domain.Segment{URL: u.String()}
+			name, err := generateName(u.String(), prefix, len(p.Segments))
+			if err != nil {
+				return nil, err
+			}
+			seg := domain.Segment{URL: u.String(), Name: name}
 			if pendingDuration != nil {
 				seg.Duration = *pendingDuration
 				pendingDuration = nil
+			}
+			if pendingByteRange != nil {
+				seg.Range = pendingByteRange
+				lastOffset = pendingByteRange.Offset
+				pendingByteRange = nil
 			}
 			p.Segments = append(p.Segments, seg)
 		}

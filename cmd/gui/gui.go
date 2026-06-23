@@ -66,7 +66,12 @@ func (g *GUI) Process() {
 		g.currentFileLabel.SetText("Preparing...")
 	})
 
-	playlist, err := m3u8.DownloadPlaylist(g.m3uUrl.Text, g.cfg.HTTP.Headers, g.cfg.HTTP.Insecure)
+	playlist, err := m3u8.DownloadPlaylist(
+		g.m3uUrl.Text,
+		g.cfg.Videos.FilePrefix,
+		g.cfg.HTTP.Headers,
+		g.cfg.HTTP.Insecure,
+	)
 	if err != nil {
 		g.showError(err)
 		return
@@ -89,8 +94,13 @@ func (g *GUI) Process() {
 		}
 
 		for _, entry := range playlist.VideoVariations {
-			if entry.Resolution == g.formatSelect.Selected {
-				playlist, err = m3u8.DownloadPlaylist(entry.URL, g.cfg.HTTP.Headers, g.cfg.HTTP.Insecure)
+			if entry.Resolution != "" && entry.Resolution == g.formatSelect.Selected {
+				playlist, err = m3u8.DownloadPlaylist(
+					entry.URL,
+					g.cfg.Videos.FilePrefix,
+					g.cfg.HTTP.Headers,
+					g.cfg.HTTP.Insecure,
+				)
 				if err != nil {
 					g.showError(err)
 					return
@@ -100,6 +110,7 @@ func (g *GUI) Process() {
 		}
 	}
 
+	fmt.Println("playlist url:", playlist.URL)
 	absFfmpegPath, err := ostools.ExpandPath(g.ffmpegPath.Text)
 	if err != nil {
 		g.showError(err)

@@ -19,6 +19,8 @@ func main() {
 	if err != nil {
 		dialog.ShowError(err, mainWindow)
 	}
+	filePrefix := widget.NewEntry()
+	filePrefix.SetText(tomlCfg.Videos.FilePrefix)
 	ffmpegPath := widget.NewEntry()
 	ffmpegPath.SetText(tomlCfg.Paths.FFmpegBinary)
 	outputFile := widget.NewEntry()
@@ -71,6 +73,7 @@ func main() {
 				Videos: config.VideosConfig{
 					PreferredFormat: formatSelect.Selected,
 					MaxParallel:     maxParallel,
+					FilePrefix:      filePrefix.Text,
 				},
 				Paths: config.PathsConfig{FFmpegBinary: ffmpegPath.Text},
 				HTTP: config.HTTPConfig{
@@ -95,6 +98,7 @@ func main() {
 	saveConfigButton := widget.NewButton("Save config", func() {
 		tomlCfg.HTTP.Insecure = insecureCheckbox.Checked
 		tomlCfg.Videos.PreferredFormat = formatSelect.Selected
+		tomlCfg.Videos.FilePrefix = filePrefix.Text
 		tomlCfg.Videos.MaxParallel, err = strconv.Atoi(threadNumber.Selected)
 		if err != nil {
 			dialog.ShowError(err, mainWindow)
@@ -174,11 +178,22 @@ func main() {
 					nil,
 					ffmpegPath,
 				),
-				container.NewHBox(
+				container.NewBorder(
+					nil, nil,
 					widget.NewLabel("Threads"),
+					nil,
 					threadNumber,
-					insecureCheckbox,
 				),
+			),
+			container.NewGridWithColumns(
+				2,
+				container.NewBorder(
+					nil, nil,
+					widget.NewLabel("Prefix"),
+					nil,
+					filePrefix,
+				),
+				insecureCheckbox,
 			),
 			container.NewCenter(saveConfigButton),
 			container.NewBorder(
