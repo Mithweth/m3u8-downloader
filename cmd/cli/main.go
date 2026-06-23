@@ -236,7 +236,7 @@ func Run() error {
 			return err
 		}
 	default:
-		return fmt.Errorf("Playlist type not supported")
+		return fmt.Errorf("playlist type not supported")
 	}
 	ffm := ffmpeg.New(cfg.FileConfig.Paths.FFmpegBinary)
 	ffmevents := make(chan domain.FFmpegEvent)

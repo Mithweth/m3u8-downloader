@@ -40,9 +40,7 @@ func PrepareFileList(path string, files []string) (string, error) {
 		return "", err
 	}
 	defer func() {
-		if cerr := fd.Close(); err == nil && cerr != nil {
-			err = cerr
-		}
+		_ = fd.Close()
 	}()
 	for _, e := range files {
 		if filepath.Dir(e) == path {
@@ -60,8 +58,9 @@ func ConcatFiles(path string, files []string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	defer out.Close()
-
+	defer func() {
+		_ = out.Close()
+	}()
 	for _, file := range files {
 		in, err := os.Open(file)
 		if err != nil {
