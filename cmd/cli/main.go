@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"github.com/Mithweth/m3u8-downloader/internal/config"
+	"github.com/Mithweth/m3u8-downloader/internal/domain"
 	"github.com/Mithweth/m3u8-downloader/internal/ffmpeg"
 	"github.com/Mithweth/m3u8-downloader/internal/m3u8"
 	"github.com/Mithweth/m3u8-downloader/internal/utils/ostools"
@@ -167,15 +168,15 @@ func Run() error {
 	if err != nil {
 		return err
 	}
-	entries, err := m3u8.DownloadM3U8(cfg.URL, cfg.FileConfig.HTTP.Headers, cfg.FileConfig.HTTP.Insecure)
+	playlist, err := m3u8.DownloadPlaylist(cfg.URL, cfg.FileConfig.HTTP.Headers, cfg.FileConfig.HTTP.Insecure)
 	if err != nil {
 		return err
 	}
-	if m3u8.IsPlaylist(entries) {
+	if playlist.Type == domain.PlaylistMaster {
 		hasDownloaded := false
-		for _, entry := range entries {
-			if m3u8.IsPreferredFormat(entry, cfg.FileConfig.Videos.PreferredFormat) {
-				entries, err = m3u8.DownloadM3U8(entry, cfg.FileConfig.HTTP.Headers, cfg.FileConfig.HTTP.Insecure)
+		for _, entry := range playlist.Segments {
+			if m3u8.IsPreferredFormat(entry.URL, cfg.FileConfig.Videos.PreferredFormat) {
+				playlist, err = m3u8.DownloadPlaylist(entry.URL, cfg.FileConfig.HTTP.Headers, cfg.FileConfig.HTTP.Insecure)
 				if err != nil {
 					return err
 				}
@@ -184,7 +185,7 @@ func Run() error {
 			}
 		}
 		if !hasDownloaded {
-			return fmt.Errorf("valid formats are: %v", m3u8.GetFormats(entries))
+			return fmt.Errorf("valid formats are: %v", m3u8.GetFormats(playlist.Segments))
 		}
 	}
 	workDir, cleanup, err := ostools.GetWorkingDirectory(cfg.TemporaryDirectory)
@@ -192,7 +193,7 @@ func Run() error {
 		return err
 	}
 	defer cleanup()
-	events := make(chan m3u8.DownloadEvent)
+	events := make(chan domain.DownloadEvent)
 
 	go func() {
 		for ev := range events {
@@ -208,7 +209,7 @@ func Run() error {
 	}()
 
 	files, err := m3u8.DownloadVideos(
-		entries,
+		playlist,
 		workDir,
 		cfg.FileConfig.HTTP.Headers,
 		cfg.FileConfig.Videos.MaxParallel,
@@ -221,16 +222,34 @@ func Run() error {
 		return err
 	}
 
-	fileList, err := ffmpeg.PrepareFileList(workDir, files)
-	if err != nil {
-		return err
+	fmt.Println("duration", ffmpeg.GetDuration(playlist))
+	var inputFile string
+	switch playlist.Type {
+	case domain.PlaylistTS:
+		inputFile, err = ffmpeg.PrepareFileList(workDir, files)
+		if err != nil {
+			return err
+		}
+	case domain.PlaylistFMP4:
+		inputFile, err = ffmpeg.ConcatFiles(workDir, files)
+		if err != nil {
+			return err
+		}
+	default:
+		return fmt.Errorf("Playlist type not supported")
 	}
-	fmt.Printf("Creating %s... ", cfg.OutputFile)
-	if errConvert := ffmpeg.Convert(cfg.FileConfig.Paths.FFmpegBinary, fileList, cfg.OutputFile); errConvert != nil {
-		fmt.Printf("FAIL (%s)\n", errConvert)
-		return err
+	ffm := ffmpeg.New(cfg.FileConfig.Paths.FFmpegBinary)
+	ffmevents := make(chan domain.FFmpegEvent)
+	defer close(ffmevents)
+	go func() {
+		for ev := range ffmevents {
+			fmt.Printf("Creating %s... %.1f%%\n", cfg.OutputFile, ev.Percent*100)
+		}
+	}()
+	if errConvert := ffm.Convert(playlist, inputFile, cfg.OutputFile, ffmevents); errConvert != nil {
+		return errConvert
 	}
-	fmt.Printf("OK\n")
+	fmt.Printf("OK!\n")
 	return nil
 }
 

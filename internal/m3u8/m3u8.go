@@ -5,11 +5,11 @@ package m3u8
 // Currently only supports playlists with distinct segment files.
 
 import (
-	"bufio"
 	"context"
 	"crypto/tls"
 	"errors"
 	"fmt"
+	"github.com/Mithweth/m3u8-downloader/internal/domain"
 	"io"
 	"net/http"
 	"net/url"
@@ -20,29 +20,10 @@ import (
 	"time"
 )
 
-type DownloadEvent struct {
-	Done          int
-	Total         int
-	AlreadyExists bool
-	URL           string
-	FilePath      string
-	Success       bool
-	Error         error
-}
-
-func IsPlaylist(a []string) bool {
-	for _, s := range a {
-		if strings.HasSuffix(s, "m3u8") || strings.HasSuffix(s, "m3u") {
-			return true
-		}
-	}
-	return false
-}
-
-func GetFormats(a []string) []string {
+func GetFormats(a []domain.Segment) []string {
 	var retval []string
 	for _, s := range a {
-		p := strings.Split(s, "/")
+		p := strings.Split(s.URL, "/")
 		if len(p) >= 2 {
 			retval = append(retval, p[len(p)-2])
 		}
@@ -56,64 +37,6 @@ func IsPreferredFormat(s, f string) bool {
 		return false
 	}
 	return p[len(p)-2] == f
-}
-
-func DownloadM3U8(m3u8url string, headers map[string]string, insecure bool) ([]string, error) {
-	baseUrl, err := url.Parse(m3u8url)
-	if err != nil {
-		return nil, err
-	}
-	req, err := http.NewRequest("GET", m3u8url, nil)
-	if err != nil {
-		return nil, err
-	}
-
-	for k, v := range headers {
-		req.Header.Set(k, v)
-	}
-
-	httpClient := &http.Client{
-		Timeout: 60 * time.Second,
-	}
-	if insecure {
-		httpClient.Transport = &http.Transport{
-			TLSClientConfig: &tls.Config{
-				InsecureSkipVerify: true,
-			},
-		}
-	}
-	resp, err := httpClient.Do(req)
-	if err != nil {
-		return nil, err
-	}
-	defer func() {
-		_ = resp.Body.Close()
-	}()
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return nil, fmt.Errorf("HTTP error %d", resp.StatusCode)
-	}
-
-	var retval []string
-
-	scanner := bufio.NewScanner(resp.Body)
-	for scanner.Scan() {
-		line := strings.TrimSpace(scanner.Text())
-
-		if line == "" || strings.HasPrefix(line, "#") {
-			continue
-		}
-		u, err := baseUrl.Parse(line)
-		if err != nil {
-			return nil, err
-		}
-		retval = append(retval, u.String())
-	}
-
-	if err := scanner.Err(); err != nil {
-		return nil, err
-	}
-
-	return retval, nil
 }
 
 func DownloadVideo(ctx context.Context, videoUrl, path string, index int, headers map[string]string, insecure bool) (bool, string, error) {
@@ -184,20 +107,20 @@ func DownloadVideo(ctx context.Context, videoUrl, path string, index int, header
 }
 
 func DownloadVideos(
-	entries []string,
+	playlist *domain.Playlist,
 	path string,
 	headers map[string]string,
 	maxParallel int,
 	insecure bool,
-	events chan<- DownloadEvent,
+	events chan<- domain.DownloadEvent,
 ) ([]string, error) {
 	if maxParallel <= 0 {
 		maxParallel = 1
 	}
-	total := len(entries)
+	total := len(playlist.Segments)
 	done := 0
-	results := make([]string, len(entries))
-	errCh := make(chan error, len(entries))
+	results := make([]string, len(playlist.Segments))
+	errCh := make(chan error, len(playlist.Segments))
 	sem := make(chan struct{}, maxParallel)
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -206,7 +129,7 @@ func DownloadVideos(
 	var mu sync.Mutex
 	var wg sync.WaitGroup
 
-	for i, entry := range entries {
+	for i, entry := range playlist.Segments {
 		wg.Add(1)
 
 		go func() {
@@ -218,7 +141,7 @@ func DownloadVideos(
 				return
 			}
 
-			exists, dest, err := DownloadVideo(ctx, entry, path, i+1, headers, insecure)
+			exists, dest, err := DownloadVideo(ctx, entry.URL, path, i+1, headers, insecure)
 			results[i] = dest
 			mu.Lock()
 			done++
@@ -226,22 +149,22 @@ func DownloadVideos(
 			mu.Unlock()
 			if err != nil {
 				cancel()
-				errCh <- fmt.Errorf("download %s: %w", entry, err)
-				events <- DownloadEvent{
+				errCh <- fmt.Errorf("download %s: %w", entry.URL, err)
+				events <- domain.DownloadEvent{
 					Done:     currentDone,
 					Total:    total,
-					URL:      entry,
+					URL:      entry.URL,
 					FilePath: dest,
 					Success:  false,
 					Error:    err,
 				}
 				return
 			}
-			events <- DownloadEvent{
+			events <- domain.DownloadEvent{
 				Done:          currentDone,
 				Total:         total,
 				AlreadyExists: exists,
-				URL:           entry,
+				URL:           entry.URL,
 				FilePath:      dest,
 				Success:       err == nil,
 				Error:         err,
