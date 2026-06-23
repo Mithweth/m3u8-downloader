@@ -19,7 +19,6 @@ func New(path string) Ffmpeg {
 
 func (f *Ffmpeg) Convert(p *domain.Playlist, input, output string, events chan<- domain.FFmpegEvent) error {
 	var cmd *exec.Cmd
-	var percent float64
 	errCh := make(chan error, 1)
 	duration := GetDuration(p)
 	switch p.Type {
@@ -47,7 +46,7 @@ func (f *Ffmpeg) Convert(p *domain.Playlist, input, output string, events chan<-
 			output,
 		)
 	default:
-		return fmt.Errorf("Playlist type not supported")
+		return fmt.Errorf("playlist type not supported")
 	}
 
 	stdout, err := cmd.StdoutPipe()
@@ -70,19 +69,23 @@ func (f *Ffmpeg) Convert(p *domain.Playlist, input, output string, events chan<-
 				if err != nil {
 					errCh <- err
 				}
-				percent = elapsedMs / 1000000.0 / duration
+				percent := elapsedMs / 1000000.0 / duration
 				if percent > 1 {
 					percent = 1
 				}
 				events <- domain.FFmpegEvent{Percent: percent}
 			}
+			if scanErr := scanner.Err(); scanErr != nil {
+				errCh <- scanErr
+			}
 		}
 	}()
 
-	err = cmd.Wait()
-	err = <-errCh
-	if err != nil {
-		return fmt.Errorf("ffmpeg failed: %w", err)
+	if waitErr := cmd.Wait(); waitErr != nil {
+		return fmt.Errorf("ffmpeg failed: %w", waitErr)
+	}
+	if scanErr := <-errCh; scanErr != nil {
+		return fmt.Errorf("ffmpeg failed: %w", scanErr)
 	}
 
 	return nil

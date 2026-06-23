@@ -157,7 +157,7 @@ func (g *GUI) Process() {
 			g.showError(err)
 		}
 	default:
-		g.showError(fmt.Errorf("Playlist type not supported"))
+		g.showError(fmt.Errorf("playlist type not supported"))
 	}
 
 	fyne.Do(func() {

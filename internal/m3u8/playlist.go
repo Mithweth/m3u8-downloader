@@ -29,6 +29,13 @@ func extractURI(line string) string {
 	return line[start : start+end]
 }
 
+func extractDuration(line string) (float64, error) {
+	val := strings.TrimPrefix(line, "#EXTINF:")
+	val = strings.TrimSpace(strings.TrimSuffix(val, ","))
+
+	return strconv.ParseFloat(val, 64)
+}
+
 func DownloadPlaylist(m3u8url string, headers map[string]string, insecure bool) (*domain.Playlist, error) {
 	baseUrl, err := url.Parse(m3u8url)
 	if err != nil {
@@ -66,7 +73,7 @@ func DownloadPlaylist(m3u8url string, headers map[string]string, insecure bool) 
 
 	var p domain.Playlist
 
-	var duration float64
+	var pendingDuration *float64
 
 	scanner := bufio.NewScanner(resp.Body)
 	for scanner.Scan() {
@@ -85,14 +92,11 @@ func DownloadPlaylist(m3u8url string, headers map[string]string, insecure bool) 
 			p.Type = domain.PlaylistMaster
 		}
 		if strings.HasPrefix(line, "#EXTINF") {
-			val := strings.TrimPrefix(line, "#EXTINF:")
-			if strings.HasSuffix(val, ",") {
-				val = strings.TrimSuffix(val, ",")
-			}
-			duration, err = strconv.ParseFloat(val, 64)
+			d, err := extractDuration(line)
 			if err != nil {
 				return nil, err
 			}
+			pendingDuration = &d
 		}
 
 		if strings.HasPrefix(line, "#") {
@@ -103,7 +107,12 @@ func DownloadPlaylist(m3u8url string, headers map[string]string, insecure bool) 
 		if err != nil {
 			return nil, err
 		}
-		p.Segments = append(p.Segments, domain.Segment{URL: u.String(), Duration: duration})
+		seg := domain.Segment{URL: u.String()}
+		if pendingDuration != nil {
+			seg.Duration = *pendingDuration
+			pendingDuration = nil
+		}
+		p.Segments = append(p.Segments, seg)
 	}
 
 	if err := scanner.Err(); err != nil {
