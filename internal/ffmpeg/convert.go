@@ -53,7 +53,7 @@ func (f *Ffmpeg) Convert(p *domain.Playlist, input, output string, events chan<-
 	if err != nil {
 		return err
 	}
-
+	fmt.Println("ffmpeg command:", strings.Join(cmd.Args, " "))
 	if err := cmd.Start(); err != nil {
 		return err
 	}
@@ -75,9 +75,9 @@ func (f *Ffmpeg) Convert(p *domain.Playlist, input, output string, events chan<-
 				}
 				events <- domain.FFmpegEvent{Percent: percent}
 			}
-			if scanErr := scanner.Err(); scanErr != nil {
-				errCh <- scanErr
-			}
+		}
+		if scanErr := scanner.Err(); scanErr != nil {
+			errCh <- scanErr
 		}
 	}()
 

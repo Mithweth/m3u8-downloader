@@ -5,12 +5,39 @@ import (
 	"crypto/tls"
 	"fmt"
 	"github.com/Mithweth/m3u8-downloader/internal/domain"
+	"github.com/Mithweth/m3u8-downloader/internal/utils/strtools"
 	"net/http"
 	"net/url"
 	"strconv"
 	"strings"
 	"time"
 )
+
+func extractStreamInf(line string) *domain.VideoVariation {
+	var v domain.VideoVariation
+	attrs := strtools.RealSplit(strings.TrimPrefix(line, "#EXTINF:"), ',')
+	for _, attr := range attrs {
+		key, val, found := strings.Cut(attr, "=")
+		if !found {
+			continue
+		}
+
+		switch key {
+		case "BANDWIDTH":
+			v.Bandwidth, _ = strconv.Atoi(key)
+		case "RESOLUTION":
+			v.Resolution = val
+		case "AVERAGE-BANDWIDTH":
+			v.AverageBandwidth, _ = strconv.Atoi(key)
+		case "CODECS":
+			for _, codec := range strings.Split(val, ",") {
+				v.Codecs = append(v.Codecs, strings.TrimPrefix(codec, " "))
+			}
+		default:
+		}
+	}
+	return &v
+}
 
 func extractURI(line string) string {
 	const key = `URI="`
@@ -71,8 +98,9 @@ func DownloadPlaylist(m3u8url string, headers map[string]string, insecure bool) 
 		return nil, fmt.Errorf("HTTP error %d", resp.StatusCode)
 	}
 
-	var p domain.Playlist
+	p := domain.Playlist{URL: m3u8url}
 
+	var pendingVariation *domain.VideoVariation
 	var pendingDuration *float64
 
 	scanner := bufio.NewScanner(resp.Body)
@@ -90,6 +118,7 @@ func DownloadPlaylist(m3u8url string, headers map[string]string, insecure bool) 
 		}
 		if strings.HasPrefix(line, "#EXT-X-STREAM-INF") {
 			p.Type = domain.PlaylistMaster
+			pendingVariation = extractStreamInf(line)
 		}
 		if strings.HasPrefix(line, "#EXTINF") {
 			d, err := extractDuration(line)
@@ -107,12 +136,26 @@ func DownloadPlaylist(m3u8url string, headers map[string]string, insecure bool) 
 		if err != nil {
 			return nil, err
 		}
-		seg := domain.Segment{URL: u.String()}
-		if pendingDuration != nil {
-			seg.Duration = *pendingDuration
-			pendingDuration = nil
+		if pendingVariation != nil {
+			pendingVariation.URL = u.String()
+			p.VideoVariations = append(p.VideoVariations, *pendingVariation)
+			pendingVariation = nil
+		} else {
+			seg := domain.Segment{URL: u.String()}
+			if pendingDuration != nil {
+				seg.Duration = *pendingDuration
+				pendingDuration = nil
+			}
+			p.Segments = append(p.Segments, seg)
 		}
-		p.Segments = append(p.Segments, seg)
+	}
+
+	if p.Type == domain.PlaylistUnknown {
+		if len(p.VideoVariations) > 0 {
+			p.Type = domain.PlaylistMaster
+		} else if len(p.Segments) > 0 {
+			p.Type = domain.PlaylistTS
+		}
 	}
 
 	if err := scanner.Err(); err != nil {

@@ -145,6 +145,9 @@ func parseArgs() (config.Config, error) {
 	fmt.Printf("Using ffmpeg: %s\n", tomlCfg.Paths.FFmpegBinary)
 	cfg.FileConfig = tomlCfg
 	cfg.URL = pflag.Arg(0)
+	if !strings.HasSuffix(pflag.Arg(1), ".mp4") {
+		return config.Config{}, fmt.Errorf("output file needs a .mp4 extension: %s", pflag.Arg(1))
+	}
 	cfg.OutputFile, err = ostools.ExpandPath(pflag.Arg(1))
 	if err != nil {
 		return config.Config{}, err
@@ -174,8 +177,8 @@ func Run() error {
 	}
 	if playlist.Type == domain.PlaylistMaster {
 		hasDownloaded := false
-		for _, entry := range playlist.Segments {
-			if m3u8.IsPreferredFormat(entry.URL, cfg.FileConfig.Videos.PreferredFormat) {
+		for _, entry := range playlist.VideoVariations {
+			if entry.Resolution == cfg.FileConfig.Videos.PreferredFormat {
 				playlist, err = m3u8.DownloadPlaylist(entry.URL, cfg.FileConfig.HTTP.Headers, cfg.FileConfig.HTTP.Insecure)
 				if err != nil {
 					return err
@@ -185,7 +188,7 @@ func Run() error {
 			}
 		}
 		if !hasDownloaded {
-			return fmt.Errorf("valid formats are: %v", m3u8.GetFormats(playlist.Segments))
+			return fmt.Errorf("valid formats are: %v", m3u8.GetAvailableFormats(playlist.VideoVariations))
 		}
 	}
 	workDir, cleanup, err := ostools.GetWorkingDirectory(cfg.TemporaryDirectory)
@@ -193,6 +196,7 @@ func Run() error {
 		return err
 	}
 	defer cleanup()
+	fmt.Println("temporary directory:", workDir)
 	events := make(chan domain.DownloadEvent)
 
 	go func() {
@@ -207,7 +211,6 @@ func Run() error {
 			}
 		}
 	}()
-
 	files, err := m3u8.DownloadVideos(
 		playlist,
 		workDir,
@@ -217,7 +220,6 @@ func Run() error {
 		events,
 	)
 	close(events)
-
 	if err != nil {
 		return err
 	}

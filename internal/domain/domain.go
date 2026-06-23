@@ -3,7 +3,8 @@ package domain
 type PlaylistType int
 
 const (
-	PlaylistMaster PlaylistType = iota
+	PlaylistUnknown PlaylistType = iota
+	PlaylistMaster
 	PlaylistTS
 	PlaylistFMP4
 )
@@ -13,9 +14,19 @@ type Segment struct {
 	Duration float64
 }
 
+type VideoVariation struct {
+	URL              string
+	Bandwidth        int
+	AverageBandwidth int
+	Resolution       string
+	Codecs           []string
+}
+
 type Playlist struct {
-	Type     PlaylistType
-	Segments []Segment
+	URL             string
+	Type            PlaylistType
+	VideoVariations []VideoVariation
+	Segments        []Segment
 }
 
 type DownloadEvent struct {
