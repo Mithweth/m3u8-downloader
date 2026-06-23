@@ -2,6 +2,7 @@ package ffmpeg
 
 import (
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -53,25 +54,30 @@ func PrepareFileList(path string, files []string) (string, error) {
 	return concatFile, nil
 }
 
-func Convert(ffmpegBin, fileList, output string) error {
-	if _, err := os.Stat(ffmpegBin); err != nil {
-		return err
-	}
-	cmd := exec.Command(
-		ffmpegBin,
-		"-v", "error",
-		"-f", "concat",
-		"-y",
-		"-i", fileList,
-		"-c", "copy",
-		"-bsf:a", "aac_adtstoasc",
-		output,
-	)
-
-	out, err := cmd.CombinedOutput()
+func ConcatFiles(path string, files []string) (string, error) {
+	concatFile := filepath.Join(path, "temporary.av1")
+	out, err := os.Create(concatFile)
 	if err != nil {
-		return fmt.Errorf("ffmpeg failed: %w: %s", err, string(out))
+		return "", err
+	}
+	defer out.Close()
+
+	for _, file := range files {
+		in, err := os.Open(file)
+		if err != nil {
+			return "", fmt.Errorf("open %s: %w", file, err)
+		}
+
+		_, copyErr := io.Copy(out, in)
+		closeErr := in.Close()
+
+		if copyErr != nil {
+			return "", fmt.Errorf("copy %s: %w", file, copyErr)
+		}
+		if closeErr != nil {
+			return "", fmt.Errorf("close %s: %w", file, closeErr)
+		}
 	}
 
-	return nil
+	return concatFile, nil
 }

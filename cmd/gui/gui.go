@@ -6,6 +6,7 @@ import (
 	"fyne.io/fyne/v2/dialog"
 	"fyne.io/fyne/v2/widget"
 	"github.com/Mithweth/m3u8-downloader/internal/config"
+	"github.com/Mithweth/m3u8-downloader/internal/domain"
 	"github.com/Mithweth/m3u8-downloader/internal/ffmpeg"
 	"github.com/Mithweth/m3u8-downloader/internal/m3u8"
 	"github.com/Mithweth/m3u8-downloader/internal/utils/ostools"
@@ -25,7 +26,7 @@ type GUI struct {
 	processButton    *widget.Button
 }
 
-func (g *GUI) consumeEvents(events <-chan m3u8.DownloadEvent) {
+func (g *GUI) consumeEvents(events <-chan domain.DownloadEvent) {
 	for ev := range events {
 		fyne.Do(func() {
 			g.progressBar.SetValue(float64(ev.Done) / float64(ev.Total))
@@ -65,14 +66,14 @@ func (g *GUI) Process() {
 		g.currentFileLabel.SetText("Preparing...")
 	})
 
-	entries, err := m3u8.DownloadM3U8(g.m3uUrl.Text, g.cfg.HTTP.Headers, g.cfg.HTTP.Insecure)
+	playlist, err := m3u8.DownloadPlaylist(g.m3uUrl.Text, g.cfg.HTTP.Headers, g.cfg.HTTP.Insecure)
 	if err != nil {
 		g.showError(err)
 		return
 	}
-	if m3u8.IsPlaylist(entries) {
+	if playlist.Type == domain.PlaylistMaster {
 		if g.formatSelect.Selected == "" {
-			formats := m3u8.GetFormats(entries)
+			formats := m3u8.GetFormats(playlist.Segments)
 
 			fyne.Do(func() {
 				g.formatSelect.Options = formats
@@ -86,9 +87,9 @@ func (g *GUI) Process() {
 			return
 		}
 
-		for _, entry := range entries {
-			if m3u8.IsPreferredFormat(entry, g.formatSelect.Selected) {
-				entries, err = m3u8.DownloadM3U8(entry, g.cfg.HTTP.Headers, g.cfg.HTTP.Insecure)
+		for _, entry := range playlist.Segments {
+			if m3u8.IsPreferredFormat(entry.URL, g.formatSelect.Selected) {
+				playlist, err = m3u8.DownloadPlaylist(entry.URL, g.cfg.HTTP.Headers, g.cfg.HTTP.Insecure)
 				if err != nil {
 					g.showError(err)
 					return
@@ -98,7 +99,6 @@ func (g *GUI) Process() {
 		}
 	}
 
-	fmt.Println("files to download:", entries)
 	absFfmpegPath, err := ostools.ExpandPath(g.ffmpegPath.Text)
 	if err != nil {
 		g.showError(err)
@@ -128,26 +128,36 @@ func (g *GUI) Process() {
 	defer cleanup()
 	fmt.Println("temporary directory:", workDir)
 
-	events := make(chan m3u8.DownloadEvent)
+	events := make(chan domain.DownloadEvent)
+	defer close(events)
 	go g.consumeEvents(events)
 	files, err := m3u8.DownloadVideos(
-		entries,
+		playlist,
 		workDir,
 		g.cfg.HTTP.Headers,
 		g.cfg.Videos.MaxParallel,
 		g.cfg.HTTP.Insecure,
 		events,
 	)
-	close(events)
 	if err != nil {
 		g.showError(err)
 		return
 	}
 
-	fileList, err := ffmpeg.PrepareFileList(workDir, files)
-	if err != nil {
-		g.showError(err)
-		return
+	var inputFile string
+	switch playlist.Type {
+	case domain.PlaylistTS:
+		inputFile, err = ffmpeg.PrepareFileList(workDir, files)
+		if err != nil {
+			g.showError(err)
+		}
+	case domain.PlaylistFMP4:
+		inputFile, err = ffmpeg.ConcatFiles(workDir, files)
+		if err != nil {
+			g.showError(err)
+		}
+	default:
+		g.showError(fmt.Errorf("Playlist type not supported"))
 	}
 
 	fyne.Do(func() {
@@ -156,7 +166,18 @@ func (g *GUI) Process() {
 		)
 	})
 
-	if err := ffmpeg.Convert(absFfmpegPath, fileList, absOutputFile); err != nil {
+	ffmevents := make(chan domain.FFmpegEvent)
+	defer close(ffmevents)
+	go func() {
+		for ev := range ffmevents {
+			fyne.Do(func() {
+				g.progressBar.SetValue(ev.Percent)
+			})
+		}
+	}()
+
+	ffm := ffmpeg.New(absFfmpegPath)
+	if err := ffm.Convert(playlist, inputFile, absOutputFile, ffmevents); err != nil {
 		g.showError(err)
 		return
 	}
