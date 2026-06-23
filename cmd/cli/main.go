@@ -48,6 +48,14 @@ func parseArgs() (config.Config, error) {
 		"HTTP User-Agent header",
 	)
 
+	pflag.StringVarP(
+		&tomlCfg.Videos.FilePrefix,
+		"prefix",
+		"P",
+		tomlCfg.Videos.FilePrefix,
+		"Prefix for downloaded segments",
+	)
+
 	pflag.BoolVarP(
 		&tomlCfg.HTTP.Insecure,
 		"insecure",
@@ -171,15 +179,25 @@ func Run() error {
 	if err != nil {
 		return err
 	}
-	playlist, err := m3u8.DownloadPlaylist(cfg.URL, cfg.FileConfig.HTTP.Headers, cfg.FileConfig.HTTP.Insecure)
+	playlist, err := m3u8.DownloadPlaylist(
+		cfg.URL,
+		cfg.FileConfig.Videos.FilePrefix,
+		cfg.FileConfig.HTTP.Headers,
+		cfg.FileConfig.HTTP.Insecure,
+	)
 	if err != nil {
 		return err
 	}
 	if playlist.Type == domain.PlaylistMaster {
 		hasDownloaded := false
 		for _, entry := range playlist.VideoVariations {
-			if entry.Resolution == cfg.FileConfig.Videos.PreferredFormat {
-				playlist, err = m3u8.DownloadPlaylist(entry.URL, cfg.FileConfig.HTTP.Headers, cfg.FileConfig.HTTP.Insecure)
+			if cfg.FileConfig.Videos.PreferredFormat != "" && entry.Resolution == cfg.FileConfig.Videos.PreferredFormat {
+				playlist, err = m3u8.DownloadPlaylist(
+					entry.URL,
+					cfg.FileConfig.Videos.FilePrefix,
+					cfg.FileConfig.HTTP.Headers,
+					cfg.FileConfig.HTTP.Insecure,
+				)
 				if err != nil {
 					return err
 				}
@@ -191,6 +209,7 @@ func Run() error {
 			return fmt.Errorf("valid formats are: %v", m3u8.GetAvailableFormats(playlist.VideoVariations))
 		}
 	}
+	fmt.Println("playlist url:", playlist.URL)
 	workDir, cleanup, err := ostools.GetWorkingDirectory(cfg.TemporaryDirectory)
 	if err != nil {
 		return err
@@ -198,7 +217,6 @@ func Run() error {
 	defer cleanup()
 	fmt.Println("temporary directory:", workDir)
 	events := make(chan domain.DownloadEvent)
-
 	go func() {
 		for ev := range events {
 			switch {

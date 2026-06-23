@@ -12,10 +12,8 @@ import (
 	"github.com/Mithweth/m3u8-downloader/internal/domain"
 	"io"
 	"net/http"
-	"net/url"
 	"os"
 	"path/filepath"
-	"strings"
 	"sync"
 	"time"
 )
@@ -30,22 +28,8 @@ func GetAvailableFormats(a []domain.VideoVariation) []string {
 	return retval
 }
 
-func DownloadVideo(ctx context.Context, videoUrl, path string, index int, headers map[string]string, insecure bool) (bool, string, error) {
-	u, err := url.Parse(videoUrl)
-	if err != nil {
-		return false, "", err
-	}
-
-	filename := filepath.Base(u.Path)
-	ext := filepath.Ext(filename)
-	base := strings.TrimSuffix(filename, ext)
-
-	filename = fmt.Sprintf("%s%04d%s", base, index, ext)
-	if !strings.HasSuffix(filename, ".ts") {
-		filename += ".ts"
-	}
-
-	dest := filepath.Join(path, filename)
+func DownloadVideo(ctx context.Context, segment domain.Segment, path string, index int, headers map[string]string, insecure bool) (bool, string, error) {
+	dest := filepath.Join(path, segment.Name)
 
 	if _, err := os.Stat(dest); err == nil {
 		return true, dest, nil
@@ -53,9 +37,15 @@ func DownloadVideo(ctx context.Context, videoUrl, path string, index int, header
 		return false, "", err
 	}
 
-	req, err := http.NewRequestWithContext(ctx, "GET", videoUrl, nil)
+	req, err := http.NewRequestWithContext(ctx, "GET", segment.URL, nil)
 	if err != nil {
 		return false, "", err
+	}
+
+	if segment.Range != nil {
+		start := segment.Range.Offset
+		end := start + segment.Range.Length - 1
+		req.Header.Set("Range", fmt.Sprintf("bytes=%d-%d", start, end))
 	}
 
 	for k, v := range headers {
@@ -79,7 +69,7 @@ func DownloadVideo(ctx context.Context, videoUrl, path string, index int, header
 		_ = resp.Body.Close()
 	}()
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return false, "", fmt.Errorf("HTTP error %d: %s", resp.StatusCode, videoUrl)
+		return false, "", fmt.Errorf("HTTP error %d: %s", resp.StatusCode, segment.URL)
 	}
 
 	f, err := os.Create(dest)
@@ -132,7 +122,7 @@ func DownloadVideos(
 				return
 			}
 
-			exists, dest, err := DownloadVideo(ctx, entry.URL, path, i+1, headers, insecure)
+			exists, dest, err := DownloadVideo(ctx, entry, path, i+1, headers, insecure)
 			results[i] = dest
 			mu.Lock()
 			done++

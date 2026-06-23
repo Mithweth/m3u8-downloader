@@ -9,9 +9,16 @@ const (
 	PlaylistFMP4
 )
 
+type ByteRange struct {
+	Offset int64
+	Length int64
+}
+
 type Segment struct {
 	URL      string
+	Name     string
 	Duration float64
+	Range    *ByteRange
 }
 
 type VideoVariation struct {
